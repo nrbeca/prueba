@@ -466,27 +466,37 @@ elif pagina == " Ver MAP":
                 
                 # Obtener datos de pasivos para la UR seleccionada
                 pasivos_ur = obtener_pasivos_ur(ur_codigo, usar_2026=config.get('usar_2026', True))
-                devengado = pasivos_ur['Devengado']
-                pagado = pasivos_ur['Pagado']
+                pasivos_shcp = pasivos_ur['Pasivo']  # Monto Pasivo (devengado - pagado al 31 dic)
+                pago_cop = pasivos_ur.get('PagoCOP', 0)  # Por ahora no tenemos este dato
                 
                 cp1, cp2 = st.columns(2)
                 with cp1:
-                    valor_shcp = format_currency(devengado)
+                    valor_shcp = format_currency(pasivos_shcp)
                     st.markdown(f'<div style="border:1px solid #ddd;border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:0.8rem;color:#666;">Pasivos reportados a la SHCP</div><div style="font-size:1.2rem;font-weight:bold;color:#9B2247;">{valor_shcp}</div></div>', unsafe_allow_html=True)
                 with cp2:
-                    valor_cop10 = format_currency(pagado)
-                    st.markdown(f'<div style="border:1px solid #ddd;border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:0.8rem;color:#666;">Pasivos pagados en COP 10</div><div style="font-size:1.2rem;font-weight:bold;color:#002F2A;">{valor_cop10}</div></div>', unsafe_allow_html=True)
+                    # Por el momento no sabemos cómo se saca, dejamos vacío
+                    st.markdown('<div style="border:1px solid #ddd;border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:0.8rem;color:#666;">Pasivos pagados en COP 10</div><div style="font-size:1.2rem;font-weight:bold;color:#002F2A;"></div></div>', unsafe_allow_html=True)
                 
                 st.markdown("**Avance de pago de pasivos**")
                 
-                if devengado > 0:
-                    pct_avance_pasivos = (pagado / devengado) * 100
-                    pendiente = max(0, devengado - pagado)
-                    fig3 = go.Figure(go.Pie(values=[pagado, pendiente], labels=['Pagado', 'Pendiente'], hole=0.6, marker_colors=[COLOR_VERDE, COLOR_GRIS], textinfo='none'))
-                    fig3.add_annotation(text=f"{pct_avance_pasivos:.2f}%", x=0.5, y=0.5, font_size=18, font_color=COLOR_VINO, showarrow=False)
+                # Lógica: pagado = PagoCOP / PasivosReportados, por_pagar = 1 - pagado
+                if pasivos_shcp > 0 and pago_cop > 0:
+                    pct_pagado = pago_cop / pasivos_shcp
+                    if pct_pagado > 1:
+                        pct_por_pagar = 0
+                    else:
+                        pct_por_pagar = 1 - pct_pagado
+                    
+                    fig3 = go.Figure(go.Pie(values=[pct_pagado, pct_por_pagar], labels=['Pagado', 'Por pagar'], hole=0.6, marker_colors=[COLOR_VERDE, COLOR_GRIS], textinfo='none'))
+                    fig3.add_annotation(text=f"{pct_pagado*100:.2f}%", x=0.5, y=0.5, font_size=18, font_color=COLOR_VINO, showarrow=False)
+                elif pasivos_shcp > 0:
+                    # Hay pasivos pero no hay pago COP aún
+                    fig3 = go.Figure(go.Pie(values=[0, 1], labels=['Pagado', 'Por pagar'], hole=0.6, marker_colors=[COLOR_VERDE, COLOR_GRIS], textinfo='none'))
+                    fig3.add_annotation(text="0.00%", x=0.5, y=0.5, font_size=18, font_color=COLOR_VINO, showarrow=False)
                 else:
+                    # Sin pasivos
                     fig3 = go.Figure(go.Pie(values=[1], labels=['Sin pasivos'], hole=0.6, marker_colors=['#e0e0e0'], textinfo='none'))
-                    fig3.add_annotation(text="Sin pasivos", x=0.5, y=0.5, font_size=14, font_color='#999', showarrow=False)
+                    fig3.add_annotation(text="", x=0.5, y=0.5, font_size=14, font_color='#999', showarrow=False)
                 
                 fig3.update_layout(showlegend=True, legend=dict(orientation="h", y=-0.2), margin=dict(t=10, b=30, l=10, r=10), height=180)
                 st.plotly_chart(fig3, use_container_width=True, key="fig_map_pasivos")
