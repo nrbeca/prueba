@@ -16,7 +16,8 @@ import pickle
 
 from config import (
     MONTH_NAMES_FULL, formatear_fecha, obtener_ultimo_dia_habil, 
-    get_config_by_year, UR_NOMBRES, PARTIDAS_AUSTERIDAD, DENOMINACIONES_AUSTERIDAD
+    get_config_by_year, UR_NOMBRES, PARTIDAS_AUSTERIDAD, DENOMINACIONES_AUSTERIDAD,
+    PASIVOS_2026, obtener_pasivos_ur
 )
 from map_processor import procesar_map
 from sicop_processor import procesar_sicop
@@ -378,7 +379,7 @@ elif pagina == " Ver MAP":
     st.markdown("<br>", unsafe_allow_html=True)
     
     # Tabs MAP
-    tab1, tab2, tab3 = st.tabs([" Resumen General", " Dashboard Presupuesto", " Gráficas"])
+    tab1, tab2 = st.tabs([" Resumen General", " Dashboard Presupuesto"])
     
     with tab1:
         categorias = resultados['categorias']
@@ -462,15 +463,31 @@ elif pagina == " Ver MAP":
                     st.plotly_chart(fig2, use_container_width=True, key="fig_map_periodo")
                 
                 st.markdown("#### Pasivos con cargo al presupuesto")
+                
+                # Obtener datos de pasivos para la UR seleccionada
+                pasivos_ur = obtener_pasivos_ur(ur_codigo, usar_2026=config.get('usar_2026', True))
+                devengado = pasivos_ur['Devengado']
+                pagado = pasivos_ur['Pagado']
+                
                 cp1, cp2 = st.columns(2)
                 with cp1:
-                    st.markdown('<div style="border:1px solid #ddd;border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:0.8rem;color:#666;">Pasivos reportados a la SHCP</div><div style="font-size:1.2rem;font-weight:bold;"></div></div>', unsafe_allow_html=True)
+                    valor_shcp = format_currency(devengado)
+                    st.markdown(f'<div style="border:1px solid #ddd;border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:0.8rem;color:#666;">Pasivos reportados a la SHCP</div><div style="font-size:1.2rem;font-weight:bold;color:#9B2247;">{valor_shcp}</div></div>', unsafe_allow_html=True)
                 with cp2:
-                    st.markdown('<div style="border:1px solid #ddd;border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:0.8rem;color:#666;">Pasivos pagados en COP 10</div><div style="font-size:1.2rem;font-weight:bold;"></div></div>', unsafe_allow_html=True)
+                    valor_cop10 = format_currency(pagado)
+                    st.markdown(f'<div style="border:1px solid #ddd;border-radius:8px;padding:1rem;text-align:center;"><div style="font-size:0.8rem;color:#666;">Pasivos pagados en COP 10</div><div style="font-size:1.2rem;font-weight:bold;color:#002F2A;">{valor_cop10}</div></div>', unsafe_allow_html=True)
                 
                 st.markdown("**Avance de pago de pasivos**")
-                fig3 = go.Figure(go.Pie(values=[1], labels=['Sin pasivos'], hole=0.6, marker_colors=['#e0e0e0'], textinfo='none'))
-                fig3.add_annotation(text="-", x=0.5, y=0.5, font_size=16, font_color=COLOR_VINO, showarrow=False)
+                
+                if devengado > 0:
+                    pct_avance_pasivos = (pagado / devengado) * 100
+                    pendiente = max(0, devengado - pagado)
+                    fig3 = go.Figure(go.Pie(values=[pagado, pendiente], labels=['Pagado', 'Pendiente'], hole=0.6, marker_colors=[COLOR_VERDE, COLOR_GRIS], textinfo='none'))
+                    fig3.add_annotation(text=f"{pct_avance_pasivos:.2f}%", x=0.5, y=0.5, font_size=18, font_color=COLOR_VINO, showarrow=False)
+                else:
+                    fig3 = go.Figure(go.Pie(values=[1], labels=['Sin pasivos'], hole=0.6, marker_colors=['#e0e0e0'], textinfo='none'))
+                    fig3.add_annotation(text="Sin pasivos", x=0.5, y=0.5, font_size=14, font_color='#999', showarrow=False)
+                
                 fig3.update_layout(showlegend=True, legend=dict(orientation="h", y=-0.2), margin=dict(t=10, b=30, l=10, r=10), height=180)
                 st.plotly_chart(fig3, use_container_width=True, key="fig_map_pasivos")
             
@@ -513,17 +530,6 @@ elif pagina == " Ver MAP":
                 else:
                     st.info("No hay partidas con disponible")
     
-    with tab3:
-        cg1, cg2 = st.columns(2)
-        with cg1:
-            fig_pie = px.pie(df_cat, values='Mod. Periodo', names='Categoria', color_discrete_sequence=[COLOR_VINO, COLOR_BEIGE, COLOR_GRIS, COLOR_VERDE])
-            st.plotly_chart(fig_pie, use_container_width=True, key="pie_map_cat")
-        with cg2:
-            fig_bar = go.Figure()
-            fig_bar.add_trace(go.Bar(name='Ejercido', x=df_cat['Categoria'], y=df_cat['Ejercido'], marker_color=COLOR_NARANJA))
-            fig_bar.add_trace(go.Bar(name='Disponible', x=df_cat['Categoria'], y=df_cat['Disponible'], marker_color=COLOR_AZUL))
-            fig_bar.update_layout(barmode='stack', xaxis_tickangle=-45)
-            st.plotly_chart(fig_bar, use_container_width=True, key="bar_map_cat")
     
     # Botón de descarga
     st.markdown("---")
@@ -580,7 +586,7 @@ elif pagina == " Ver SICOP":
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs([" Por Sección", " Dashboard Austeridad", " Gráficas"])
+    tab1, tab2 = st.tabs([" Por Sección", " Dashboard Austeridad"])
     
     with tab1:
         subtotales = resultados['subtotales']
@@ -699,17 +705,6 @@ elif pagina == " Ver SICOP":
         )
         st.caption("El Excel incluye fórmulas para Nota y Avance Anual")
     
-    with tab3:
-        cg1, cg2 = st.columns(2)
-        with cg1:
-            fig_pie = px.pie(df_sec, values='Mod. Periodo', names='Seccion', color_discrete_sequence=[COLOR_VINO, COLOR_BEIGE, COLOR_GRIS, COLOR_VERDE])
-            st.plotly_chart(fig_pie, use_container_width=True, key="pie_sicop")
-        with cg2:
-            fig_bar = go.Figure()
-            fig_bar.add_trace(go.Bar(name='Ejercido', x=df_sec['Seccion'], y=df_sec['Ejercido'], marker_color=COLOR_NARANJA))
-            fig_bar.add_trace(go.Bar(name='Disponible', x=df_sec['Seccion'], y=df_sec['Disponible'], marker_color=COLOR_AZUL))
-            fig_bar.update_layout(barmode='stack', xaxis_tickangle=-45)
-            st.plotly_chart(fig_bar, use_container_width=True, key="bar_sicop")
     
     # Botón de descarga SICOP
     st.markdown("---")
