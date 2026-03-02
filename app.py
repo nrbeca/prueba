@@ -491,7 +491,7 @@ elif pagina == " Ver MAP":
                     fig3.add_annotation(text=f"{pct_pagado*100:.2f}%", x=0.5, y=0.5, font_size=18, font_color=COLOR_VINO, showarrow=False)
                 elif pasivos_shcp > 0:
                     # Hay pasivos pero no hay pago COP aún
-                    fig3 = go.Figure(go.Pie(values=[0, 1], labels=['Pagado', 'Por pagar'], hole=0.6, marker_colors=[COLOR_VERDE, COLOR_GRIS], textinfo='none'))
+                    fig3 = go.Figure(go.Pie(values=[0, 1], labels=['Pagado', 'Por pagar'], hole=0.6, marker_colors=[COLOR_NARANJA, COLOR_AZUL], textinfo='none'))
                     fig3.add_annotation(text="0.00%", x=0.5, y=0.5, font_size=18, font_color=COLOR_VINO, showarrow=False)
                 else:
                     # Sin pasivos
